@@ -16,11 +16,11 @@ VIEWPORT_HEIGHT = 720
 connected_clients = set()
 page_instance = None
 
-# --- ФОНОВЫЙ ПОТОК TELEGRAM БОТА (ОТВЕТ НА /start) ---
+# --- ФОНОВЫЙ ПОТОК TELEGRAM БОТА ---
 async def telegram_bot_polling():
     offset = 0
     async with aiohttp.ClientSession() as session:
-        print("Telegram бот запущен и слушает команду /start...")
+        print("Telegram бот запущен...")
         while True:
             try:
                 url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates?offset={offset}&timeout=30"
@@ -35,7 +35,6 @@ async def telegram_bot_polling():
                                 text = message["text"]
                                 
                                 if text.startswith("/start"):
-                                    # Отправка сообщения с кнопкой мини-приложения
                                     payload = {
                                         "chat_id": chat_id,
                                         "text": "Добро пожаловать! Нажмите кнопку ниже, чтобы запустить игру:",
@@ -53,8 +52,8 @@ async def telegram_bot_polling():
                 print(f"Ошибка в Telegram боте: {e}")
             await asyncio.sleep(1)
 
-# --- WEBSOCKET И СТРИМИНГ ИГРЫ ---
-async def handle_client(websocket):
+# --- WEBSOCKET И СТРИМИНГ ---
+async def handle_client(websocket, path=None):
     global page_instance
     connected_clients.add(websocket)
     print("Мини-приложение подключилось к облаку.")
@@ -91,7 +90,7 @@ async def stream_screen():
         )
         page_instance = await context.new_page()
         
-        print("Переход на Belbet...")
+        print("Загрузка Belbet...")
         try:
             await page_instance.goto("https://belbet.by/games", timeout=60000)
         except Exception as e:
@@ -100,26 +99,25 @@ async def stream_screen():
         while True:
             if connected_clients and page_instance:
                 try:
-                    screenshot_bytes = await page_instance.screenshot(type="jpeg", quality=50)
+                    screenshot_bytes = await page_instance.screenshot(type="jpeg", quality=40)
                     base64_frame = "data:image/jpeg;base64," + base64.b64encode(screenshot_bytes).decode('utf-8')
                     
                     for client in list(connected_clients):
                         await client.send(base64_frame)
                 except Exception as e:
-                    print(f"Ошибка кадра: {e}")
+                    print(f"Ошибка отправки кадра: {e}")
             
-            await asyncio.sleep(0.06)
+            await asyncio.sleep(0.08)
 
 async def main():
-    port = int(os.environ.get("PORT", 10000))
-    server = await websockets.serve(handle_client, "0.0.0.0", port)
-    print(f"Облачный WS-сервер запущен на порту {port}...")
-    
-    await asyncio.gather(
-        server.wait_closed(), 
-        stream_screen(),
-        telegram_bot_polling()
-    )
+    port = int(os.environ.get("PORT", 8080))
+    # В websockets v10+ параметр path не передается, поэтому запускаем с 0.0.0.0
+    async with websockets.serve(handle_client, "0.0.0.0", port):
+        print(f"Облачный WS-сервер запущен на порту {port}...")
+        await asyncio.gather(
+            stream_screen(),
+            telegram_bot_polling()
+        )
 
 if __name__ == "__main__":
     asyncio.run(main())
