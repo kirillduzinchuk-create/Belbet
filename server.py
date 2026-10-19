@@ -6,7 +6,6 @@ import os
 import aiohttp
 from playwright.async_api import async_playwright
 
-# Конфигурация
 BOT_TOKEN = "8830963907:AAGA0dGrzrDwADGqUGU2s3MAr0D1oDmmGZI"
 WEB_APP_URL = "https://kirillduzinchuk-create.github.io/Belbet/"
 
@@ -15,9 +14,8 @@ VIEWPORT_HEIGHT = 720
 
 connected_clients = set()
 page_instance = None
-current_status = "Инициализация сервера..."
+current_status = "Инициализация..."
 
-# Метод для визуальной отрисовки статусной строки на странице в баннере
 async def update_visual_status(text):
     global current_status, page_instance
     current_status = text
@@ -43,7 +41,6 @@ async def update_visual_status(text):
                         banner.style.fontWeight = 'bold';
                         banner.style.zIndex = '9999999';
                         banner.style.border = '2px solid #00FF66';
-                        banner.style.boxShadow = '0 0 10px rgba(0, 255, 102, 0.5)';
                         banner.style.pointerEvents = 'none';
                         document.body.appendChild(banner);
                     }}
@@ -53,7 +50,6 @@ async def update_visual_status(text):
         except Exception:
             pass
 
-# --- ФОНОВЫЙ ПОТОК TELEGRAM БОТА ---
 async def telegram_bot_polling():
     offset = 0
     async with aiohttp.ClientSession() as session:
@@ -70,7 +66,6 @@ async def telegram_bot_polling():
                             if message and "text" in message:
                                 chat_id = message["chat"]["id"]
                                 text = message["text"]
-                                
                                 if text.startswith("/start"):
                                     payload = {
                                         "chat_id": chat_id,
@@ -89,11 +84,10 @@ async def telegram_bot_polling():
                 print(f"Ошибка в Telegram боте: {e}")
             await asyncio.sleep(1)
 
-# --- WEBSOCKET И СТРИМИНГ ---
 async def handle_client(websocket, path=None):
     global page_instance
     connected_clients.add(websocket)
-    await update_visual_status("Клиент подключен. Стриминг активен!")
+    await update_visual_status("Клиент подключен!")
     
     try:
         async for message in websocket:
@@ -107,7 +101,6 @@ async def handle_client(websocket, path=None):
         print(f"Ошибка WebSocket: {e}")
     finally:
         connected_clients.remove(websocket)
-        await update_visual_status("Клиент отключился.")
 
 async def stream_screen():
     global page_instance
@@ -118,7 +111,10 @@ async def stream_screen():
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
-                '--disable-blink-features=AutomationControlled'
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--disable-gpu'
             ]
         )
         context = await browser.new_context(
@@ -130,31 +126,30 @@ async def stream_screen():
         )
         page_instance = await context.new_page()
         
-        await update_visual_status("Загрузка сайта Belbet...")
+        await update_visual_status("Быстрый старт Belbet...")
         try:
-            await page_instance.goto("https://belbet.by/games", timeout=60000)
-            await update_visual_status("Сайт загружен. Ожидание клиента...")
+            # Загружаем страницу не дожидаясь всех тяжелых скриптов и шрифтов
+            await page_instance.goto("https://belbet.by/games", wait_until="domcontentloaded", timeout=30000)
+            await update_visual_status("Сайт открыт!")
         except Exception as e:
-            await update_visual_status(f"Ошибка загрузки: {e}")
+            await update_visual_status(f"Загружено с ограничением: {e}")
 
         frame_count = 0
         while True:
             if connected_clients and page_instance:
                 try:
                     frame_count += 1
-                    # Каждые 30 кадров обновляем индикатор движения
-                    if frame_count % 30 == 0:
-                        await update_visual_status(f"Трансляция активна [Кадр #{frame_count}]")
-
-                    screenshot_bytes = await page_instance.screenshot(type="jpeg", quality=40)
+                    # Оптимизированный скриншот с минимальным разрешением и высокой сжимаемостью
+                    screenshot_bytes = await page_instance.screenshot(type="jpeg", quality=30)
                     base64_frame = "data:image/jpeg;base64," + base64.b64encode(screenshot_bytes).decode('utf-8')
                     
                     for client in list(connected_clients):
                         await client.send(base64_frame)
                 except Exception as e:
-                    print(f"Ошибка отправки кадра: {e}")
+                    print(f"Ошибка скриншота: {e}")
             
-            await asyncio.sleep(0.08)
+            # Оптимальная задержка для стабильности Railway
+            await asyncio.sleep(0.2)
 
 async def main():
     port = int(os.environ.get("PORT", 8080))
