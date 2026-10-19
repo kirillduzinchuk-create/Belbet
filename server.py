@@ -112,35 +112,41 @@ async def stream_screen():
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-accelerated-2d-canvas',
-                '--no-first-run',
-                '--no-zygote',
-                '--disable-gpu'
+                '--disable-gpu',
+                '--disable-blink-features=AutomationControlled'
             ]
         )
         context = await browser.new_context(
             viewport={'width': VIEWPORT_WIDTH, 'height': VIEWPORT_HEIGHT},
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             locale="ru-BY",
+            timezone_Id="Europe/Minsk",
             geolocation={"latitude": 53.9006, "longitude": 27.5590},
             permissions=["geolocation"]
         )
+        
+        # Скрываем следы автоматизации от антифрод-систем сайта
+        await context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        
         page_instance = await context.new_page()
         
-        await update_visual_status("Быстрый старт Belbet...")
+        await update_visual_status("Открытие Belbet...")
         try:
-            # Загружаем страницу не дожидаясь всех тяжелых скриптов и шрифтов
+            # Сначала заходим на главный домен для прохождения первичных куки/защиты
+            await page_instance.goto("https://belbet.by/", wait_until="networkidle", timeout=30000)
+            await asyncio.sleep(2)
+            # Переходим на страницу игр
             await page_instance.goto("https://belbet.by/games", wait_until="domcontentloaded", timeout=30000)
-            await update_visual_status("Сайт открыт!")
+            await update_visual_status("Игра загружена!")
         except Exception as e:
-            await update_visual_status(f"Загружено с ограничением: {e}")
+            await update_visual_status(f"Загрузка: {e}")
 
         frame_count = 0
         while True:
             if connected_clients and page_instance:
                 try:
                     frame_count += 1
-                    # Оптимизированный скриншот с минимальным разрешением и высокой сжимаемостью
-                    screenshot_bytes = await page_instance.screenshot(type="jpeg", quality=30)
+                    screenshot_bytes = await page_instance.screenshot(type="jpeg", quality=40)
                     base64_frame = "data:image/jpeg;base64," + base64.b64encode(screenshot_bytes).decode('utf-8')
                     
                     for client in list(connected_clients):
@@ -148,7 +154,6 @@ async def stream_screen():
                 except Exception as e:
                     print(f"Ошибка скриншота: {e}")
             
-            # Оптимальная задержка для стабильности Railway
             await asyncio.sleep(0.2)
 
 async def main():
