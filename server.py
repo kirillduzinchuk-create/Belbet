@@ -14,7 +14,7 @@ VIEWPORT_HEIGHT = 720
 
 connected_clients = set()
 page_instance = None
-current_status = "Запуск..."
+current_status = "Инициализация браузера..."
 
 async def update_visual_status(text):
     global current_status, page_instance
@@ -71,11 +71,11 @@ async def telegram_bot_polling():
                                 if text.startswith("/start"):
                                     payload = {
                                         "chat_id": chat_id,
-                                        "text": "Добро пожаловать! Нажмите кнопку ниже, чтобы запустить игру:",
+                                        "text": "Добро пожаловать! Нажмите кнопку ниже, чтобы запустить интерактивный браузер:",
                                         "reply_markup": {
                                             "inline_keyboard": [[
                                                 {
-                                                    "text": "🎮 Играть в Belbet",
+                                                    "text": "🎮 Управлять Бельбет",
                                                     "web_app": {"url": WEB_APP_URL}
                                                 }
                                             ]]
@@ -89,7 +89,7 @@ async def telegram_bot_polling():
 async def handle_client(websocket, path=None):
     global page_instance
     connected_clients.add(websocket)
-    await update_visual_status("Клиент подключен. Ожидание...")
+    await update_visual_status("Управление подключено!")
     
     try:
         async for message in websocket:
@@ -97,7 +97,7 @@ async def handle_client(websocket, path=None):
             if data.get('type') == 'click' and page_instance:
                 x = data.get('x')
                 y = data.get('y')
-                await update_visual_status(f"Клик по координатам: {x}, {y}")
+                print(f"Клик от пользователя: X={x}, Y={y}")
                 await page_instance.mouse.click(x, y)
     except Exception as e:
         print(f"Ошибка WebSocket: {e}")
@@ -127,45 +127,42 @@ async def stream_screen():
             permissions=["geolocation"]
         )
         
-        await context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        # Полное сокрытие флагов автоматизации для обхода проверок
+        await context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+            window.navigator.chrome = { runtime: {} };
+            Object.defineProperty(navigator, 'languages', {get: () => ['ru-RU', 'ru', 'en-US', 'en']});
+        """)
         
         page_instance = await context.new_page()
         
-        await update_visual_status("Открытие belbet.by...")
+        await update_visual_status("Открытие belbet.by/games...")
         try:
-            # Переходим на сайт и ждем полной загрузки DOM
+            # Переходим напрямую на целевую страницу игр
             await page_instance.goto("https://belbet.by/games", wait_until="domcontentloaded", timeout=40000)
-            await asyncio.sleep(3)
-            
-            # Получаем заголовок страницы для диагностики
-            title = await page_instance.title()
-            url = page_instance.url
-            await update_visual_status(f"Заголовок: {title} | URL: {url[:30]}...")
+            await asyncio.sleep(2)
+            await update_visual_status("Браузер готов. Управляйте экраном!")
         except Exception as e:
-            await update_visual_status(f"Ошибка загрузки: {str(e)[:40]}")
+            await update_visual_status(f"Загрузка: {str(e)[:40]}")
 
         while True:
             if connected_clients and page_instance:
                 try:
-                    # Периодически обновляем заголовок в плашке, чтобы видеть живой статус
-                    current_title = await page_instance.title()
-                    if current_title:
-                        await update_visual_status(f"Сайт активен: {current_title}")
-
-                    screenshot_bytes = await page_instance.screenshot(type="jpeg", quality=40)
+                    # Создаем качественный скриншот текущего состояния браузера
+                    screenshot_bytes = await page_instance.screenshot(type="jpeg", quality=50)
                     base64_frame = "data:image/jpeg;base64," + base64.b64encode(screenshot_bytes).decode('utf-8')
                     
                     for client in list(connected_clients):
                         await client.send(base64_frame)
                 except Exception as e:
-                    print(f"Ошибка скриншота: {e}")
+                    print(f"Ошибка стриминга: {e}")
             
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.25)
 
 async def main():
     port = int(os.environ.get("PORT", 8080))
     async with websockets.serve(handle_client, "0.0.0.0", port):
-        print(f"Облачный WS-сервер запущен на порту {port}...")
+        print(f"Интерактивный WS-сервер запущен на порту {port}...")
         await asyncio.gather(
             stream_screen(),
             telegram_bot_polling()
