@@ -8,8 +8,7 @@ from playwright.async_api import async_playwright
 
 # Конфигурация
 BOT_TOKEN = "8830963907:AAGA0dGrzrDwADGqUGU2s3MAr0D1oDmmGZI"
-# Ссылка на ваш фронтенд на GitHub Pages (куда ведет кнопка в боте)
-WEB_APP_URL = "https://ваш-логин.github.io/название-репозитория/"
+WEB_APP_URL = "https://kirillduzinchuk-create.github.io/Belbet/"
 
 VIEWPORT_WIDTH = 1280
 VIEWPORT_HEIGHT = 720
@@ -113,7 +112,6 @@ async def stream_screen():
 
 async def main():
     port = int(os.environ.get("PORT", 10000))
-    # Запускаем WebSocket сервер и Telegram бота одновременно
     server = await websockets.serve(handle_client, "0.0.0.0", port)
     print(f"Облачный WS-сервер запущен на порту {port}...")
     
