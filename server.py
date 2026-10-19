@@ -120,7 +120,7 @@ async def stream_screen():
             viewport={'width': VIEWPORT_WIDTH, 'height': VIEWPORT_HEIGHT},
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             locale="ru-BY",
-            timezone_Id="Europe/Minsk",
+            timezone_id="Europe/Minsk",
             geolocation={"latitude": 53.9006, "longitude": 27.5590},
             permissions=["geolocation"]
         )
@@ -132,10 +132,8 @@ async def stream_screen():
         
         await update_visual_status("Открытие Belbet...")
         try:
-            # Сначала заходим на главный домен для прохождения первичных куки/защиты
             await page_instance.goto("https://belbet.by/", wait_until="networkidle", timeout=30000)
             await asyncio.sleep(2)
-            # Переходим на страницу игр
             await page_instance.goto("https://belbet.by/games", wait_until="domcontentloaded", timeout=30000)
             await update_visual_status("Игра загружена!")
         except Exception as e:
