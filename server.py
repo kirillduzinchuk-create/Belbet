@@ -41,7 +41,7 @@ async def telegram_bot_polling():
                                         "reply_markup": {
                                             "inline_keyboard": [[
                                                 {
-                                                    "text": "🎮 Играть в Belbet",
+                                                    "text": "Играть в Belbet",
                                                     "web_app": {"url": WEB_APP_URL}
                                                 }
                                             ]]
