@@ -11,9 +11,8 @@ const statusDiv = document.getElementById('status');
 const WS_URL = 'wss://belbet-production.up.railway.app';
 
 let socket = null;
-const DESKTOP_WIDTH = 1920;
-const DESKTOP_HEIGHT = 1080;
-
+const DESKTOP_WIDTH = 1280;
+const DESKTOP_HEIGHT = 720;
 function connect() {
     socket = new WebSocket(WS_URL);
 
