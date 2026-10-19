@@ -8,7 +8,7 @@ const ctx = canvas.getContext('2d');
 const statusDiv = document.getElementById('status');
 
 // WSS-адрес вашего локального сервера (получим на Этапе 4)
-const WS_URL = 'wss://YOUR_NGROK_ADDRESS.ngrok-free.app';
+const WS_URL = 'wss://belbet-production.up.railway.app';
 
 let socket = null;
 const DESKTOP_WIDTH = 1920;
