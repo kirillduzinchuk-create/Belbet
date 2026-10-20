@@ -2,51 +2,31 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Belbet Stream App</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Belbet Stream</title>
     <style>
-        * {
+        body, html {
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
-            user-select: none;
-            -webkit-user-select: none;
-        }
-        body, html {
             width: 100%;
             height: 100%;
-            overflow: hidden;
-            background-color: #000000;
+            background-color: #000;
             display: flex;
             justify-content: center;
             align-items: center;
+            overflow: hidden;
         }
-        #status {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: #00ff00;
-            font-family: monospace;
-            font-size: 12px;
-            z-index: 10;
-            background: rgba(0,0,0,0.7);
-            padding: 4px 8px;
-            border-radius: 4px;
-        }
-        #gameCanvas {
-            width: 100vw;
-            height: 100vh;
+        #screen {
+            width: 100%;
+            height: auto;
+            max-height: 100%;
             object-fit: contain;
-            touch-action: none;
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
-
-    <div id="status">Подключение...</div>
-    <canvas id="gameCanvas"></canvas>
-
+    <img id="screen" alt="Ожидание трансляции...">
     <script src="app.js"></script>
 </body>
 </html>
