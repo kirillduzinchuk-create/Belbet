@@ -1,3 +1,4 @@
 websockets
 aiohttp
-playwright
+mss
+Pillow
