@@ -3,8 +3,11 @@ import websockets
 import json
 import base64
 import os
+import subprocess
 import aiohttp
-from playwright.async_api import async_playwright
+from mss import mss
+from PIL import Image
+import io
 
 BOT_TOKEN = "8830963907:AAGA0dGrzrDwADGqUGU2s3MAr0D1oDmmGZI"
 WEB_APP_URL = "https://kirillduzinchuk-create.github.io/Belbet/"
@@ -13,44 +16,13 @@ VIEWPORT_WIDTH = 1280
 VIEWPORT_HEIGHT = 720
 
 connected_clients = set()
-page_instance = None
-current_status = "Инициализация браузера..."
+app_process = None
+current_status = "Инициализация Wine и запуск приложения..."
 
 async def update_visual_status(text):
-    global current_status, page_instance
+    global current_status
     current_status = text
     print(f"[STATUS]: {text}")
-    if page_instance:
-        try:
-            await page_instance.evaluate(f"""
-                (statusText) => {{
-                    let banner = document.getElementById('debug-status-banner');
-                    if (!banner) {{
-                        banner = document.createElement('div');
-                        banner.id = 'debug-status-banner';
-                        banner.style.position = 'fixed';
-                        banner.style.top = '10px';
-                        banner.style.left = '50%';
-                        banner.style.transform = 'translateX(-50%)';
-                        banner.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
-                        banner.style.color = '#00FF66';
-                        banner.style.padding = '10px 20px';
-                        banner.style.borderRadius = '15px';
-                        banner.style.fontSize = '14px';
-                        banner.style.fontFamily = 'monospace, sans-serif';
-                        banner.style.fontWeight = 'bold';
-                        banner.style.zIndex = '9999999';
-                        banner.style.border = '2px solid #00FF66';
-                        banner.style.maxWidth = '90%';
-                        banner.style.textAlign = 'center';
-                        banner.style.pointerEvents = 'none';
-                        document.body.appendChild(banner);
-                    }}
-                    banner.innerText = statusText;
-                }}
-            """, text)
-        except Exception:
-            pass
 
 async def telegram_bot_polling():
     offset = 0
@@ -71,11 +43,11 @@ async def telegram_bot_polling():
                                 if text.startswith("/start"):
                                     payload = {
                                         "chat_id": chat_id,
-                                        "text": "Добро пожаловать! Нажмите кнопку ниже, чтобы запустить интерактивный браузер:",
+                                        "text": "Интерфейс Belbet App готов:",
                                         "reply_markup": {
                                             "inline_keyboard": [[
                                                 {
-                                                    "text": "🎮 Управлять Бельбет",
+                                                    "text": "🎮 Запустить приложение",
                                                     "web_app": {"url": WEB_APP_URL}
                                                 }
                                             ]]
@@ -87,84 +59,63 @@ async def telegram_bot_polling():
             await asyncio.sleep(1)
 
 async def handle_client(websocket, path=None):
-    global page_instance
     connected_clients.add(websocket)
-    await update_visual_status("Управление подключено!")
+    await update_visual_status("Клиент подключен к сессии!")
     
     try:
         async for message in websocket:
             data = json.loads(message)
-            if data.get('type') == 'click' and page_instance:
+            if data.get('type') == 'click':
                 x = data.get('x')
                 y = data.get('y')
-                print(f"Клик от пользователя: X={x}, Y={y}")
-                await page_instance.mouse.click(x, y)
+                print(f"Клик по координатам приложения: X={x}, Y={y}")
+                # Передаем клик мыши в виртуальный дисплей на базе xdotool
+                subprocess.run(["xdotool", "mousemove", str(x), str(y), "click", "1"])
     except Exception as e:
         print(f"Ошибка WebSocket: {e}")
     finally:
         connected_clients.remove(websocket)
 
-async def stream_screen():
-    global page_instance
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            headless=True,
-            args=[
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-accelerated-2d-canvas',
-                '--disable-gpu',
-                '--disable-blink-features=AutomationControlled'
-            ]
-        )
-        context = await browser.new_context(
-            viewport={'width': VIEWPORT_WIDTH, 'height': VIEWPORT_HEIGHT},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            locale="ru-BY",
-            timezone_id="Europe/Minsk",
-            geolocation={"latitude": 53.9006, "longitude": 27.5590},
-            permissions=["geolocation"]
-        )
-        
-        # Полное сокрытие флагов автоматизации для обхода проверок
-        await context.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-            window.navigator.chrome = { runtime: {} };
-            Object.defineProperty(navigator, 'languages', {get: () => ['ru-RU', 'ru', 'en-US', 'en']});
-        """)
-        
-        page_instance = await context.new_page()
-        
-        await update_visual_status("Открытие belbet.by/games...")
-        try:
-            # Переходим напрямую на целевую страницу игр
-            await page_instance.goto("https://belbet.by/games", wait_until="domcontentloaded", timeout=40000)
-            await asyncio.sleep(2)
-            await update_visual_status("Браузер готов. Управляйте экраном!")
-        except Exception as e:
-            await update_visual_status(f"Загрузка: {str(e)[:40]}")
+async def stream_app_screen():
+    global app_process
+    
+    # Настраиваем виртуальный дисплей Xvfb
+    os.environ["DISPLAY"] = ":99"
+    subprocess.Popen(["Xvfb", ":99", "-screen", "0", f"{VIEWPORT_WIDTH}x{VIEWPORT_HEIGHT}x24"])
+    await asyncio.sleep(3)
+    
+    print("Установка/запуск приложения Belbet через Wine...")
+    # Сначала пытаемся запустить установщик в тихом режиме или запускаем уже распакованный бинарник
+    app_process = subprocess.Popen(["wine", "belbet_setup.exe"])
+    await update_visual_status("Приложение запущенно в Wine, идет стриминг...")
 
+    with mss() as sct:
+        monitor = {"top": 0, "left": 0, "width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT}
         while True:
-            if connected_clients and page_instance:
+            if connected_clients:
                 try:
-                    # Создаем качественный скриншот текущего состояния браузера
-                    screenshot_bytes = await page_instance.screenshot(type="jpeg", quality=50)
+                    sct_img = sct.grab(monitor)
+                    img = Image.frombytes("RGB", sct_img.size, sct_img.rgb)
+                    
+                    buffer = io.BytesIO()
+                    img.save(buffer, format="JPEG", quality=55)
+                    screenshot_bytes = buffer.getvalue()
+                    
                     base64_frame = "data:image/jpeg;base64," + base64.b64encode(screenshot_bytes).decode('utf-8')
                     
                     for client in list(connected_clients):
                         await client.send(base64_frame)
                 except Exception as e:
-                    print(f"Ошибка стриминга: {e}")
+                    print(f"Ошибка стриминга кадра: {e}")
             
-            await asyncio.sleep(0.25)
+            await asyncio.sleep(0.15)
 
 async def main():
-    port = int(os.environ.get("PORT", 8080))
+    port = int(os.environ.get("PORT", 10000))
     async with websockets.serve(handle_client, "0.0.0.0", port):
-        print(f"Интерактивный WS-сервер запущен на порту {port}...")
+        print(f"Сервер управления запущен на порту {port}...")
         await asyncio.gather(
-            stream_screen(),
+            stream_app_screen(),
             telegram_bot_polling()
         )
 
